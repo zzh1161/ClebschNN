@@ -35,12 +35,14 @@ class ResidualBlock(nn.Module):
         return out
     
 class schroedinger_net(nn.Module):
-    def __init__(self, dx, dt):
+    def __init__(self, hbar, dx, dt, k2, device=torch.device('cpu')):
         super(schroedinger_net, self).__init__()
         self.conp = 2 # components of psi, i.e. psi1 and psi2
         # self.hide = 8 
+        self.hbar = hbar
         self.dx = dx
         self.dt = dt
+        self.k2 = k2.to(device)
 
         self.nn = nn.Sequential(
             ResidualBlock(self.conp, 16),
@@ -53,4 +55,11 @@ class schroedinger_net(nn.Module):
         )
 
     def forward(self, psi0):
-        pass
+        f = self.nn(psi0)
+        psi1 = psi0[:,0:1,:,:]
+        psi2 = psi0[:,1:2,:,:]
+        dpsi1dt = -f*torch.conj(psi2) + 0.5j*self.hbar*torch.fft.ifftn(torch.fft.fftn(psi1, dim=(-2,-1))*self.k2, dim=(-2,-1))
+        dpis2dt = f*torch.conj(psi1)  + 0.5j*self.hbar*torch.fft.ifftn(torch.fft.fftn(psi2, dim=(-2,-1))*self.k2, dim=(-2,-1))
+        psi1 = psi1 + dpsi1dt*self.dt
+        psi2 = psi2 + dpis2dt*self.dt
+        return torch.cat((psi1, psi2), dim=1)
