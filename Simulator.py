@@ -66,7 +66,7 @@ class schroedinger_simulator_2d(nn.Module):
         div = torch.exp(complex(0,-1)*torch.fft.ifft2(torch.fft.fft2(div.real)/self.k2))
         return psi1*div, psi2*div
     
-    def forward(self, Delta_t, psi1, psi2):
+    def forward(self, psi1, psi2, Delta_t):
         sub_steps = round(Delta_t / self.dt)
         for _ in range(sub_steps):
             psi1, psi2 = self.Schroedinger(psi1, psi2)

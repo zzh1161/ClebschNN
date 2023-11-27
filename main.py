@@ -16,7 +16,7 @@ import matplotlib as mpl
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# device = torch.device('cpu')
+device = torch.device('cpu')
 
 class FluidSolver(nn.Module):
     def __init__(self, grid_x, grid_y, hbar, dt):

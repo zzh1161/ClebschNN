@@ -30,7 +30,7 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         out = self.left(x)
-        out += self.shortcut(x)
+        # out += self.shortcut(x)
         out = complex_relu(out)
         return out
     
