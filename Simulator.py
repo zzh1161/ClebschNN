@@ -40,8 +40,10 @@ class schroedinger_simulator_2d(nn.Module):
         b = complex(0,1) * (b%self.grid_y - self.grid_y/2)
         self.kx, self.ky = torch.meshgrid(a, b)
         k2 = self.kx*self.kx + self.ky*self.ky
+        k2d = self.kx*self.kx + self.ky*self.ky
         k2[0,0] = -1
         self.k2 = k2
+        self.k2d = k2d
 
         kd0 = torch.zeros(self.grid_x, self.grid_y).to(device)
         kd1 = torch.ones(self.grid_x, self.grid_y).to(device)
