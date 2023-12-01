@@ -20,9 +20,9 @@ ys = -torch.pi; ye = torch.pi
 dx = (xe-xs)/grid_size
 dy = (ye-ys)/grid_size
 hbar = 0.1
-nu = 0
-dt = 0.03
-Delta_t = 0.03
+nu = 4e-3
+dt = 0.005
+Delta_t = 0.005
 grid_t = 1001
 
 schroedinger_solver = schroedinger_simulator_2d(
@@ -93,18 +93,18 @@ class Dataset(torch.utils.data.Dataset):
                 psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
             psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
             ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
-            # ux_n, uy_n, _ = viscous_solver(ux, uy, Delta_t)
+            ux_n, uy_n, _ = viscous_solver(ux, uy, Delta_t)
             psi1_n, psi2_n = schroedinger_solver(psi1, psi2, Delta_t)
-            ux_n ,uy_n = schroedinger_solver.psi_to_velocity(psi1_n, psi2_n, hbar)
+            # ux_n, uy_n = schroedinger_solver.psi_to_velocity(psi1_n, psi2_n, hbar)
             psi_train = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
             vel_train = torch.cat((ux_n.unsqueeze(0), uy_n.unsqueeze(0)), 0).unsqueeze(0)
             
             for i_step in range(19):
                 psi1 = psi1_n; psi2 =  psi2_n
                 psi1_n, psi2_n = schroedinger_solver(psi1, psi2, Delta_t)
-                # ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
-                # ux_n, uy_n, _ = viscous_solver(ux, uy, Delta_t)
-                ux_n ,uy_n = schroedinger_solver.psi_to_velocity(psi1_n, psi2_n, hbar)
+                ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
+                ux_n, uy_n, _ = viscous_solver(ux, uy, Delta_t)
+                # ux_n, uy_n = schroedinger_solver.psi_to_velocity(psi1_n, psi2_n, hbar)
                 psi_tmp = torch.cat((psi1.unsqueeze(0),psi2.unsqueeze(0)), 0).unsqueeze(0)
                 vel_tmp = torch.cat((ux_n.unsqueeze(0), uy_n.unsqueeze(0)), 0).unsqueeze(0)
                 psi_train = torch.cat((psi_train, psi_tmp), 0)
@@ -135,9 +135,9 @@ class Dataset(torch.utils.data.Dataset):
         return self.psi.shape[0]
     
 def train():
-    n_epoch = 100
-    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.0001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+    n_epoch = 200
+    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.00001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
     train_data_loader = torch.utils.data.DataLoader(Dataset('train'), batch_size=1)
     for epoch in range(n_epoch):
         advectionNN.train()
@@ -165,8 +165,10 @@ def train():
             if epoch % 10 == 0:
                 print('Train Epoch: {} [{}]\t Loss: {:.10f}'.format(epoch, batch_index+1, loss))
         scheduler.step()
-        if total_loss < 1e-4:
+        if total_loss < 1e-5:
             break
+        if epoch % 10 == 0:
+            print(optimizer.state_dict()['param_groups'][0]['lr'])
     torch.save(advectionNN.state_dict(), 'model.pt')
 
 def test():
@@ -179,7 +181,7 @@ def test():
     psi2 = torch.fft.ifft2(torch.fft.fft2(psi2)*schroedinger_solver.kd)
     for _ in range(10):
         psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
-    # psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
+    psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
     psi = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
 
     x_np = torch.squeeze(pos_x).detach().cpu().numpy()
@@ -201,7 +203,7 @@ def test():
                 cmap = mpl.cm.get_cmap('jet', 20)
                 cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
                 plt.pause(0.1)
-                plt.savefig('results/'+str(i_step)+'.jpg')
+                plt.savefig('results/prediction/'+str(i_step)+'.jpg')
 
             psi = advectionNN(psi)
             psi1 = psi[0][0]; psi2 = psi[0][1]
@@ -210,9 +212,34 @@ def test():
             psi = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
 
 if __name__ == '__main__':
-    # train_2()
     # train()
     test()
+
+    # pos_x = schroedinger_solver.mesh_x.to(torch.device('cpu'))
+    # pos_y = schroedinger_solver.mesh_y.to(torch.device('cpu'))
+    # x_np = torch.squeeze(pos_x).detach().cpu().numpy()
+    # y_np = torch.squeeze(pos_y).detach().cpu().numpy()
+    # psi1, psi2 = tube_vortex(pos_x, pos_y, 1)
+    # psi1 = psi1.to(device); psi2 = psi2.to(device)
+    # psi1, psi2 = schroedinger_solver.Normalization(psi1, psi2)
+    # psi1 = torch.fft.ifft2(torch.fft.fft2(psi1)*schroedinger_solver.kd)
+    # psi2 = torch.fft.ifft2(torch.fft.fft2(psi2)*schroedinger_solver.kd)
+    # for _ in range(10):
+    #     psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
+    # psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
+    # ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
+    # for i_step in range(grid_t):
+    #     if i_step % 10 == 0:
+    #         wz = viscous_solver.vel_to_vor(ux, uy).to(torch.device('cpu'))
+    #         w_np = torch.squeeze(wz).detach().cpu().numpy()
+    #         vmax = 2
+    #         vmin = -2
+    #         levels = np.linspace(vmin, vmax, 20)
+    #         cmap = mpl.cm.get_cmap('jet', 20)
+    #         cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
+    #         plt.pause(0.1)
+    #         plt.savefig('results/ground/'+str(i_step)+'.jpg')
+    #     ux, uy, _ = viscous_solver(ux, uy, Delta_t)
 
     # pos_x = schroedinger_solver.mesh_x.to(torch.device('cpu'))
     # pos_y = schroedinger_solver.mesh_y.to(torch.device('cpu'))

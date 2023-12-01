@@ -12,13 +12,25 @@ class complexReLU(nn.Module):
 
     def forward(self, input):
         return F.relu(input.real, self.inplace).type(torch.complex64) + 1j*F.relu(input.imag, self.inplace).type(torch.complex64)
+    
+class complexConv2d(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding = 0,
+                 padding_mode='zeros', dilation=1, groups=1, bias=True):
+        super(complexConv2d, self).__init__()
+        self.conv_r = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        self.conv_i = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        
+    def forward(self, input, dtype=torch.complex64):    
+        return (self.conv_r(input.real) - self.conv_i(input.imag)).type(dtype) +\
+               1j*(self.conv_r(input.imag) + self.conv_i(input.real)).type(dtype)
 
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, kernel_size=3):
         super(ResidualBlock, self).__init__()
         self.kernel_size = kernel_size
         self.left = nn.Sequential(
-            ComplexConv2d(inchannel, outchannel, kernel_size=self.kernel_size, padding=(kernel_size-1)//2),
+            complexConv2d(inchannel, outchannel, kernel_size=self.kernel_size, padding=(kernel_size-1)//2, padding_mode='circular'),
             complexReLU(inplace=False),
             ComplexConv2d(outchannel, outchannel, kernel_size=1, padding=0),
         )
@@ -66,5 +78,5 @@ class schroedinger_net(nn.Module):
         psi1 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi1 - f*torch.conj(psi2)*self.dt
         psi2 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi2 + f*torch.conj(psi1)*self.dt
 
-        print('f.mean = ', torch.mean(torch.abs(f)))
+        # print('f.mean = ', torch.mean(torch.abs(f)))
         return torch.cat((psi1, psi2), dim=1)
