@@ -20,6 +20,8 @@ class complexConv2d(nn.Module):
         super(complexConv2d, self).__init__()
         self.conv_r = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
         self.conv_i = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        # nn.init.kaiming_normal_(self.conv_r.weight, mode='fan_out', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv_i.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, input, dtype=torch.complex64):    
         return (self.conv_r(input.real) - self.conv_i(input.imag)).type(dtype) +\
@@ -30,14 +32,15 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
         self.kernel_size = kernel_size
         self.left = nn.Sequential(
+            # complexConv2d(inchannel, outchannel, kernel_size=self.kernel_size, padding=(kernel_size-1)//2),
             complexConv2d(inchannel, outchannel, kernel_size=self.kernel_size, padding=(kernel_size-1)//2, padding_mode='circular'),
             complexReLU(inplace=False),
-            ComplexConv2d(outchannel, outchannel, kernel_size=1, padding=0),
+            complexConv2d(outchannel, outchannel, kernel_size=1, padding=0),
         )
         self.shortcut = nn.Sequential()
         if inchannel != outchannel:
             self.shortcut = nn.Sequential(
-                ComplexConv2d(inchannel, outchannel, kernel_size=1, padding=0),
+                complexConv2d(inchannel, outchannel, kernel_size=1, padding=0),
             )
 
     def forward(self, x):
@@ -73,8 +76,8 @@ class schroedinger_net(nn.Module):
         psi1 = psi0[:,0:1,:,:]
         psi2 = psi0[:,1:2,:,:]
 
-        psi1 = torch.fft.ifft2(torch.fft.fft2(psi1)*self.SchroedingerMask)
-        psi2 = torch.fft.ifft2(torch.fft.fft2(psi2)*self.SchroedingerMask)
+        psi1 = torch.fft.ifft2(torch.fft.fft2(psi1, dim=(-2,-1))*self.SchroedingerMask, dim=(-2,-1))
+        psi2 = torch.fft.ifft2(torch.fft.fft2(psi2, dim=(-2,-1))*self.SchroedingerMask, dim=(-2,-1))
         psi1 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi1 - f*torch.conj(psi2)*self.dt
         psi2 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi2 + f*torch.conj(psi1)*self.dt
 

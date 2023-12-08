@@ -7,6 +7,7 @@ from ViscousFlowSolver import viscous_flow_solver_2d
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 import os
 os.chdir(os.path.dirname(__file__))
 import warnings
@@ -91,7 +92,7 @@ class Dataset(torch.utils.data.Dataset):
             psi2 = torch.fft.ifft2(torch.fft.fft2(psi2)*schroedinger_solver.kd)
             for _ in range(10):
                 psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
-            psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
+            psi1, psi2 = schroedinger_solver(psi1, psi2, 20*dt)
             ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
             ux_n, uy_n, _ = viscous_solver(ux, uy, Delta_t)
             psi1_n, psi2_n = schroedinger_solver(psi1, psi2, Delta_t)
@@ -99,7 +100,7 @@ class Dataset(torch.utils.data.Dataset):
             psi_train = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
             vel_train = torch.cat((ux_n.unsqueeze(0), uy_n.unsqueeze(0)), 0).unsqueeze(0)
             
-            for i_step in range(19):
+            for i_step in range(29):
                 psi1 = psi1_n; psi2 =  psi2_n
                 psi1_n, psi2_n = schroedinger_solver(psi1, psi2, Delta_t)
                 ux, uy = schroedinger_solver.psi_to_velocity(psi1, psi2, hbar)
@@ -135,9 +136,11 @@ class Dataset(torch.utils.data.Dataset):
         return self.psi.shape[0]
     
 def train():
-    n_epoch = 200
-    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.00001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+    tb_writer = SummaryWriter()
+    train_tags = ['learning-rate','train-loss']
+    n_epoch = 100
+    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.00005, eps=1e-7)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.2)
     train_data_loader = torch.utils.data.DataLoader(Dataset('train'), batch_size=1)
     for epoch in range(n_epoch):
         advectionNN.train()
@@ -161,14 +164,24 @@ def train():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            tb_writer.add_scalar(train_tags[0], optimizer.param_groups[0]["lr"], epoch)
+            tb_writer.add_scalars(train_tags[1], {'train-loss': total_loss}, epoch)
             
             if epoch % 10 == 0:
                 print('Train Epoch: {} [{}]\t Loss: {:.10f}'.format(epoch, batch_index+1, loss))
+            
+        
         scheduler.step()
         if total_loss < 1e-5:
             break
         if epoch % 10 == 0:
-            print(optimizer.state_dict()['param_groups'][0]['lr'])
+            print('lr = ', optimizer.state_dict()['param_groups'][0]['lr'])
+            # for name, param in advectionNN.named_parameters():
+            #     print('-->name: ', name)
+            #     print('-->para: ', param)
+            #     print('-->grad: ', param.grad)
+            #     break
     torch.save(advectionNN.state_dict(), 'model.pt')
 
 def test():
@@ -181,12 +194,12 @@ def test():
     psi2 = torch.fft.ifft2(torch.fft.fft2(psi2)*schroedinger_solver.kd)
     for _ in range(10):
         psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
-    psi1, psi2 = schroedinger_solver(psi1, psi2, 10*dt)
+    psi1, psi2 = schroedinger_solver(psi1, psi2, 20*dt)
     psi = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
 
     x_np = torch.squeeze(pos_x).detach().cpu().numpy()
     y_np = torch.squeeze(pos_y).detach().cpu().numpy()
-    fig = plt.figure()
+    # fig = plt.figure()
 
     advectionNN.load_state_dict(torch.load('model.pt', map_location=lambda storage, location: storage))
     advectionNN.to(device)
@@ -203,7 +216,8 @@ def test():
                 cmap = mpl.cm.get_cmap('jet', 20)
                 cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
                 plt.pause(0.1)
-                plt.savefig('results/prediction/'+str(i_step)+'.jpg')
+                s = '%03d'%int(i_step/10)
+                plt.savefig('results/prediction/'+s+'.jpg')
 
             psi = advectionNN(psi)
             psi1 = psi[0][0]; psi2 = psi[0][1]
@@ -212,8 +226,8 @@ def test():
             psi = torch.cat((psi1.unsqueeze(0), psi2.unsqueeze(0)), 0).unsqueeze(0)
 
 if __name__ == '__main__':
-    # train()
-    test()
+    train()
+    # test()
 
     # pos_x = schroedinger_solver.mesh_x.to(torch.device('cpu'))
     # pos_y = schroedinger_solver.mesh_y.to(torch.device('cpu'))
@@ -238,8 +252,13 @@ if __name__ == '__main__':
     #         cmap = mpl.cm.get_cmap('jet', 20)
     #         cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
     #         plt.pause(0.1)
-    #         plt.savefig('results/ground/'+str(i_step)+'.jpg')
+    #         s = '%03d'%int(i_step/10)
+    #         plt.savefig('results/ground/'+s+'.jpg')
     #     ux, uy, _ = viscous_solver(ux, uy, Delta_t)
+        # noise = 1e-3*torch.randn(ux.shape)
+        # noise = noise.to(device)
+        # ux = ux + noise
+        # uy = uy + noise
 
     # pos_x = schroedinger_solver.mesh_x.to(torch.device('cpu'))
     # pos_y = schroedinger_solver.mesh_y.to(torch.device('cpu'))
@@ -257,15 +276,22 @@ if __name__ == '__main__':
     #     psi1, psi2 = schroedinger_solver.Projection(psi1, psi2)
     # display(psi1, psi2, x_np, y_np, 4444444)
 
+    # train_data_loader = torch.utils.data.DataLoader(Dataset('train'), batch_size=1)
+    # pos_x = schroedinger_solver.mesh_x.to(torch.device('cpu'))
+    # pos_y = schroedinger_solver.mesh_y.to(torch.device('cpu'))
+    # x_np = torch.squeeze(pos_x).detach().cpu().numpy()
+    # y_np = torch.squeeze(pos_y).detach().cpu().numpy()
     # for batch_idx, batch_data in enumerate(train_data_loader):
     #     psi, vel = batch_data
     #     ux = vel[0][0]; uy = vel[0][1]
-    #     wz = viscous_solver.vel_to_vor(ux, uy).to(torch.device('cpu'))
-    #     w_np = torch.squeeze(wz).detach().cpu().numpy()
-    #     vmax = 2
-    #     vmin = -2
-    #     levels = np.linspace(vmin, vmax, 20)
-    #     cmap = mpl.cm.get_cmap('jet', 20)
-    #     cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
-    #     plt.pause(0.1)
-    #     plt.savefig('results/'+str(batch_idx)+'.jpg')
+    #     print(ux)
+    #     print(uy)
+        # wz = viscous_solver.vel_to_vor(ux, uy).to(torch.device('cpu'))
+        # w_np = torch.squeeze(wz).detach().cpu().numpy()
+        # vmax = 2
+        # vmin = -2
+        # levels = np.linspace(vmin, vmax, 20)
+        # cmap = mpl.cm.get_cmap('jet', 20)
+        # cs = plt.contourf(x_np,y_np,w_np,cmap=cmap,vmin=vmin,vmax=vmax,levels=levels)
+        # plt.pause(0.1)
+        # plt.savefig('results/'+str(batch_idx)+'.jpg')
