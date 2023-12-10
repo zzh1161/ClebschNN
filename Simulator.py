@@ -57,6 +57,13 @@ class schroedinger_simulator_2d(nn.Module):
     def Schroedinger(self, psi1, psi2):
         return torch.fft.ifft2(torch.fft.fft2(psi1)*self.SchroedingerMask),\
                torch.fft.ifft2(torch.fft.fft2(psi2)*self.SchroedingerMask)
+
+    def Schroedinger_with_f(self, f, psi1, psi2):
+        p1 = torch.fft.ifft2(torch.fft.fft2(psi1)*self.SchroedingerMask)
+        p2 = torch.fft.ifft2(torch.fft.fft2(psi2)*self.SchroedingerMask)
+        p1 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*p1 - f*torch.conj(p2)*self.dt
+        p2 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*p2 + f*torch.conj(p1)*self.dt
+        return p1, p2
     
     def Normalization(self, psi1, psi2):
         psi_norm = torch.sqrt(torch.abs(psi1)**2 + torch.abs(psi2)**2)
@@ -72,6 +79,14 @@ class schroedinger_simulator_2d(nn.Module):
         sub_steps = round(Delta_t / self.dt)
         for _ in range(sub_steps):
             psi1, psi2 = self.Schroedinger(psi1, psi2)
+            psi1, psi2 = self.Normalization(psi1, psi2)
+            psi1, psi2 = self.Projection(psi1, psi2)
+        return psi1, psi2
+    
+    def advance_with_f(self, f, psi1, psi2, Delta_t):
+        sub_steps = round(Delta_t / self.dt)
+        for _ in range(sub_steps):
+            psi1, psi2 = self.Schroedinger_with_f(f, psi1, psi2)
             psi1, psi2 = self.Normalization(psi1, psi2)
             psi1, psi2 = self.Projection(psi1, psi2)
         return psi1, psi2

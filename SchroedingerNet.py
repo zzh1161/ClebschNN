@@ -66,9 +66,10 @@ class schroedinger_net(nn.Module):
             ResidualBlock(16, 16),
             ResidualBlock(16, 32),
             ResidualBlock(32, 64),
-            ResidualBlock(64, 64),
-            ResidualBlock(64, 64, kernel_size=1),
-            ComplexConv2d(64, 1, kernel_size=1, padding=0),
+            ResidualBlock(64, 128),
+            ResidualBlock(128, 256),
+            ResidualBlock(256, 256, kernel_size=1),
+            ComplexConv2d(256, 1, kernel_size=1, padding=0),
         )
 
     def forward(self, psi0):
