@@ -254,6 +254,7 @@ class SchrodingerResNet(nn.Module):
         zero_init: bool = True,
         device: torch.device = torch.device('cpu')
     ):
+        super().__init__()
         self.hbar = hbar
         self.dx   = dx
         self.dt   = dt
