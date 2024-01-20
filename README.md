@@ -1,3 +1,0 @@
-# ClebschNN
-
-This is readme.
