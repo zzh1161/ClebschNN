@@ -41,3 +41,7 @@ class complexConv2d(nn.Module):
         return (self.conv_r(input.real) - self.conv_i(input.imag)).type(dtype) +\
                1j*(self.conv_r(input.imag) + self.conv_i(input.real)).type(dtype)
     
+def complex_clamp(x, min, max):
+    real_p = torch.clamp(x.real, 0.5*min, 0.5*max)
+    imag_p = torch.clamp(x.imag, 0.5*min, 0.5*max)
+    return real_p + 1j*imag_p

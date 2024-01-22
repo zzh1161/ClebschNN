@@ -44,6 +44,7 @@ viscous_solver = viscous_flow_solver_2d(
 )
 viscous_solver.to(device)
 
+# advectionNN = NNet(dt=dt, layers=[2,20,20,20,20,20,20,20,1], device=device)
 advectionNN = ConvNet(dt)
 advectionNN.to(device)
 
@@ -117,9 +118,9 @@ class Dataset(torch.utils.data.Dataset):
         return self.psi.shape[0]
     
 def train():
-    n_epoch = 300
-    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.001, eps=1e-7)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+    n_epoch = 2000
+    optimizer = torch.optim.Adam(advectionNN.parameters(), lr=0.1, eps=1e-7)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
     train_data_loader = torch.utils.data.DataLoader(Dataset('train'), batch_size=1)
     for epoch in range(n_epoch):
         advectionNN.train()
@@ -129,8 +130,6 @@ def train():
             psi.to(device)
             psi_n.to(device)
 
-            psi1_n = psi_n[0][0]; psi2_n = psi_n[0][1]
-
             psi_adv = advectionNN(psi)
             psi1_adv = psi_adv[0][0]; psi2_adv = psi_adv[0][1]
             psi1_adv, psi2_adv = schroedinger_solver.Normalization(psi1_adv, psi2_adv)
@@ -138,7 +137,7 @@ def train():
             psi_adv = torch.cat((psi1_adv.unsqueeze(0), psi2_adv.unsqueeze(0)), 0).unsqueeze(0)
             # ux_pred, uy_pred = schroedinger_solver.psi_to_velocity(psi1_adv, psi2_adv, hbar)
 
-            loss = F.mse_loss(psi_adv.real, psi_n.real) + F.mse_loss(psi_adv.imag, psi_n.imag)
+            loss = F.l1_loss(psi_adv.real, psi_n.real) + F.l1_loss(psi_adv.imag, psi_n.imag)
             total_loss = total_loss + loss
 
             optimizer.zero_grad()
