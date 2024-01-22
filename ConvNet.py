@@ -50,38 +50,57 @@ class ConvBlock(nn.Module):
         out = cptf.complex_relu(out)
         return out
     
-class ConvNet(nn.Module):
-    def __init__(
-        self,
-        dt: float
-    ):
-        super().__init__()
-        self.dt   = dt
-        self.nn   = nn.Sequential(
-            ConvBlock(2, 16),
-            ConvBlock(16, 32),
-            ConvBlock(32, 64),
-            ConvBlock(64, 128),
-            ConvBlock(128, 128, kernel_size=1)
-        )
-        self.linear = cptl.ComplexLinear(128, 1)
+# class ConvNet(nn.Module):
+#     def __init__(
+#         self,
+#         dt: float
+#     ):
+#         super().__init__()
+#         self.dt   = dt
+#         self.nn   = nn.Sequential(
+#             ConvBlock(2, 16),
+#             ConvBlock(16, 32),
+#             ConvBlock(32, 64),
+#             ConvBlock(64, 128),
+#             ConvBlock(128, 128, kernel_size=1)
+#         )
+#         self.linear = cptl.ComplexLinear(128, 1)
 
+#     def forward(self, psi):
+#         f = self.nn(psi)
+#         a1,a2,a3,a4 = f.size()
+#         assert a1==1 and a2==128
+#         f = f.reshape(a3*a4, a2)
+#         f = self.linear(f)
+#         f = f.reshape(a1,1,a3,a4)
+#         f = complex_clamp(f, -1/self.dt, 1/self.dt)
+
+#         psi1 = psi[:,0:1,:,:]
+#         psi2 = psi[:,1:2,:,:]
+#         psi1 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi1 - f*torch.conj(psi2)*self.dt
+#         psi2 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi2 + f*torch.conj(psi1)*self.dt
+
+#         # print('f.mean = ', torch.mean(torch.abs(f)))
+#         return torch.cat((psi1, psi2), dim=1)
+
+class ConvNet(nn.Module):
+    def __init__(self, dt):
+        super().__init__()
+        self.dt = dt
+        self.nn = nn.Sequential(
+            ConvBlock(2, 64, kernel_size=5),
+            complexConv2d(64, 1, kernel_size=1)
+        )
+    
     def forward(self, psi):
         f = self.nn(psi)
-        a1,a2,a3,a4 = f.size()
-        assert a1==1 and a2==128
-        f = f.reshape(a3*a4, a2)
-        f = self.linear(f)
-        f = f.reshape(a1,1,a3,a4)
-        f = complex_clamp(f, -1/self.dt, 1/self.dt)
-
         psi1 = psi[:,0:1,:,:]
         psi2 = psi[:,1:2,:,:]
         psi1 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi1 - f*torch.conj(psi2)*self.dt
         psi2 = torch.sqrt(1 - self.dt**2 * torch.abs(f)**2)*psi2 + f*torch.conj(psi1)*self.dt
-
         # print('f.mean = ', torch.mean(torch.abs(f)))
         return torch.cat((psi1, psi2), dim=1)
+
 
 # class DNN(nn.Module):
 #     def __init__(self, layers):
